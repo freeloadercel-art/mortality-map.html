@@ -51,15 +51,13 @@
     <div class="map-container" id="map"></div>
     <div class="note">
         <strong>📊 Data sources:</strong> Harvard MAPA Project, Wolowyna et al. (2016).<br>
-        <strong>🗺️ Map data:</strong> ArcGIS REST service (public) – Ukrainian administrative boundaries.<br>
+        <strong>🗺️ Map data:</strong> Your uploaded GeoJSON file (<code>ukraine_oblasts.geojson</code>) from the same folder.<br>
         <strong>💡 Tip:</strong> Click on any oblast to see the exact mortality percentage for the selected year.
     </div>
 </div>
 
 <script>
-    // ============================================
-    // MORTALITY DATA BY OBLAST AND YEAR
-    // ============================================
+    // Mortality data per oblast per year (same as before)
     const yearData = {
         1931: {
             "Poltavska": 15, "Cherkaska": 12, "Kyivska": 10, "Kharkivska": 10, "Dnipropetrovska": 8,
@@ -112,7 +110,7 @@
     function getMortality(name, year) {
         if (!name || !yearData[year]) return null;
         if (yearData[year][name]) return yearData[year][name];
-        // Fuzzy match
+        // Fuzzy match: remove common suffixes
         const base = name.replace(/(ska|kyi|ska oblast|kyi oblast|oblast)$/i, '').trim();
         for (let key in yearData[year]) {
             if (key.includes(base) || base.includes(key)) return yearData[year][key];
@@ -126,7 +124,8 @@
         if (geojsonLayer) {
             geojsonLayer.eachLayer(function(layer) {
                 const props = layer.feature.properties;
-                const name = props.NAME_1 || props.NAME || props.ADMIN || '';
+                // Try different property names commonly found in GeoJSON
+                const name = props.shapeName || props.NAME_1 || props.NAME || props.name || props.ADMIN || '';
                 const mortality = getMortality(name, year);
                 layer.setStyle({
                     fillColor: getColor(mortality),
@@ -171,12 +170,12 @@
         mapDiv.style.position = 'relative';
         mapDiv.appendChild(loadingDiv);
 
-        // Use a reliable GeoJSON source (ArcGIS REST service, returns actual polygons)
-        const geojsonUrl = 'https://services1.arcgis.com/0MSEUqKaxRlEPj5g/arcgis/rest/services/Ukraine_Admin_Boundaries/FeatureServer/0/query?where=1%3D1&outFields=*&f=geojson';
+        // Use your local GeoJSON file
+        const geojsonUrl = './ukraine_oblasts.geojson';
 
         fetch(geojsonUrl)
             .then(response => {
-                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                 return response.json();
             })
             .then(data => {
@@ -185,7 +184,7 @@
 
                 geojsonLayer = L.geoJSON(data, {
                     style: function(feature) {
-                        const name = feature.properties.NAME_1 || feature.properties.NAME || feature.properties.ADMIN || '';
+                        const name = feature.properties.shapeName || feature.properties.NAME_1 || feature.properties.NAME || '';
                         const mortality = getMortality(name, currentYear);
                         return {
                             fillColor: getColor(mortality),
@@ -196,7 +195,7 @@
                         };
                     },
                     onEachFeature: function(feature, layer) {
-                        const name = feature.properties.NAME_1 || feature.properties.NAME || feature.properties.ADMIN || '';
+                        const name = feature.properties.shapeName || feature.properties.NAME_1 || feature.properties.NAME || '';
                         layer.bindPopup(() => {
                             const mortality = getMortality(name, currentYear);
                             let popupContent = `<strong>${name}</strong><br>`;
@@ -252,27 +251,21 @@
                 const errorDiv = document.createElement('div');
                 errorDiv.className = 'error';
                 errorDiv.innerHTML = `
-                    <strong>❌ Failed to load map data from the external service.</strong><br>
-                    Error: ${error.message}<br><br>
-                    This may be a temporary network issue. You can try reloading.<br>
-                    Alternatively, <a href="#" id="useLocal">use a local GeoJSON file</a> if you have one.
+                    <strong>❌ Could not load local GeoJSON file.</strong><br>
+                    Make sure you have uploaded a file named <code>ukraine_oblasts.geojson</code> to the <strong>same folder</strong> as this HTML file.<br>
+                    <br>
+                    <strong>Current URL attempted:</strong> ${geojsonUrl}<br>
+                    <br>
+                    If your file has a different name, edit the <code>geojsonUrl</code> variable in the code (line ~150).<br>
+                    <br>
+                    <strong>To download the correct GeoJSON:</strong><br>
+                    1. Go to <a href="https://github.com/wmgeolab/geoBoundaries/tree/main/releaseData/gbOpen/UKR/ADM1" target="_blank">geoBoundaries ADM1 page</a><br>
+                    2. Click on <code>geoBoundaries-UKR-ADM1.geojson</code><br>
+                    3. Click the <strong>Raw</strong> button and save the file.<br>
+                    4. Rename it to <code>ukraine_oblasts.geojson</code> and upload to this folder.
                 `;
                 document.getElementById('map').innerHTML = '';
                 document.getElementById('map').appendChild(errorDiv);
-
-                // If user wants to use a local file, they can replace the URL below
-                document.getElementById('useLocal')?.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    const localUrl = './ukraine_oblasts.geojson';
-                    fetch(localUrl)
-                        .then(res => res.json())
-                        .then(localData => {
-                            // reload map with local data
-                            // (code omitted for brevity – same as above)
-                            alert('Local file loading not implemented in this fallback. Edit the URL manually.');
-                        })
-                        .catch(() => alert('Local file not found. Make sure it is uploaded.'));
-                });
             });
     });
 </script>
