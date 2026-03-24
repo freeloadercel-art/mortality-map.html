@@ -1,17 +1,1 @@
-{
-javascript
-const geojsonFileName = "ukraine_oblasts.geojson";
-    "created": "2022-01-06T14:10:36.587123",
-    "description": "GeoJSON ADM0 boundaries for Ukraine",
-    "format": "GeoJSON",
-    "download_url": "https://github.com/wmgeolab/geoBoundaries/raw/9469f09/releaseData/gbOpen/UKR/ADM0/geoBoundaries-UKR-ADM0.geojson",
-    "id": "48fd28b5-4d7b-42b2-b251-ec9c82227e1f",
-    "last_modified": "2025-08-26T11:41:46",
-    "metadata_modified": "2025-08-26T12:04:15.014562",
-    "microdata": false,
-    "dataset_id": "2bf91bb6-f6f6-4add-afd6-ab7f93a63f90",
-    "resource_type": "api",
-    "name": "geoBoundaries-UKR-ADM0.geojson",
-    "mimetype": null,
-    "size": "1.0M"
-}
+
