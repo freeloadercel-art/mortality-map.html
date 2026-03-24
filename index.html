@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -33,7 +34,6 @@
         .note { padding: 0.75rem 1.5rem; background: #fef9e3; font-size: 0.85rem; border-top: 1px solid #e2e8f0; }
         .loading, .error { text-align: center; padding: 2rem; }
         .error { color: #b22222; background: #ffe0e0; margin: 1rem; border-radius: 8px; }
-        .error a { color: #b22222; }
     </style>
 </head>
 <body>
@@ -52,7 +52,7 @@
     <div class="map-container" id="map"></div>
     <div class="note">
         <strong>📊 Data sources:</strong> Harvard MAPA Project, Wolowyna et al. (2016).<br>
-        <strong>🗺️ Map data:</strong> geoBoundaries (global administrative boundaries) – <a href="https://github.com/wmgeolab/geoBoundaries" target="_blank">source</a>.<br>
+        <strong>🗺️ Map data:</strong> Your uploaded GeoJSON file (<code>ukraine_oblasts.geojson</code>).<br>
         <strong>💡 Tip:</strong> Click on any oblast to see the exact mortality percentage for the selected year.
     </div>
 </div>
@@ -111,11 +111,10 @@
     let currentYear = 1932;
     let map;
 
-    // Helper to get mortality for a given oblast name
     function getMortality(name, year) {
         if (!name || !yearData[year]) return null;
         if (yearData[year][name]) return yearData[year][name];
-        // Fuzzy match: try removing suffixes like "ska", "ska oblast", etc.
+        // Fuzzy match: try removing suffixes
         const base = name.replace(/(ska|kyi|ska oblast|kyi oblast|oblast)$/i, '').trim();
         for (let key in yearData[year]) {
             if (key.includes(base) || base.includes(key)) return yearData[year][key];
@@ -159,7 +158,6 @@
             maxZoom: 10
         }).addTo(map);
 
-        // Show loading indicator
         const mapDiv = document.getElementById('map');
         const loadingDiv = document.createElement('div');
         loadingDiv.className = 'loading';
@@ -175,8 +173,8 @@
         mapDiv.style.position = 'relative';
         mapDiv.appendChild(loadingDiv);
 
-        // Use the raw GitHub URL for geoBoundaries ADM1 (oblasts)
-        const geojsonUrl = 'https://raw.githubusercontent.com/wmgeolab/geoBoundaries/main/releaseData/gbOpen/UKR/ADM1/geoBoundaries-UKR-ADM1.geojson';
+        // Use the local GeoJSON file you uploaded
+        const geojsonUrl = './ukraine_oblasts.geojson';
 
         fetch(geojsonUrl)
             .then(response => {
@@ -201,7 +199,7 @@
                     },
                     onEachFeature: function(feature, layer) {
                         const name = feature.properties.shapeName || feature.properties.NAME_1 || feature.properties.NAME || '';
-                        layer.bindPopup(function() {
+                        layer.bindPopup(() => {
                             const mortality = getMortality(name, currentYear);
                             let popupContent = `<strong>${name}</strong><br>`;
                             if (mortality !== null) {
@@ -217,7 +215,7 @@
                 }).addTo(map);
                 map.fitBounds(geojsonLayer.getBounds());
 
-                // Add legend
+                // Legend
                 const legend = L.control({ position: 'bottomright' });
                 legend.onAdd = function() {
                     const div = L.DomUtil.create('div', 'legend');
@@ -236,7 +234,7 @@
                 };
                 legend.addTo(map);
 
-                // Setup timeline slider
+                // Slider
                 const slider = document.getElementById('timeline-slider');
                 const yearDisplay = document.getElementById('year-display');
                 noUiSlider.create(slider, {
@@ -256,44 +254,15 @@
                 const errorDiv = document.createElement('div');
                 errorDiv.className = 'error';
                 errorDiv.innerHTML = `
-                    <strong>❌ Failed to load map data</strong><br>
-                    Error: ${error.message}<br><br>
-                    This may be due to network issues or rate limiting.<br>
-                    <strong>Alternative:</strong> Upload your own GeoJSON file to your GitHub repository and change the URL in the code.<br><br>
-                    <a href="#" id="useLocalBtn">Use local file (ukraine_oblasts.geojson)</a>
+                    <strong>❌ Could not load local GeoJSON file.</strong><br>
+                    Make sure you have uploaded a file named <code>ukraine_oblasts.geojson</code> to the same folder as this HTML file.<br>
+                    <br>
+                    <strong>Current URL attempted:</strong> ${geojsonUrl}<br>
+                    <br>
+                    If your file has a different name, edit the <code>geojsonUrl</code> variable in the code.
                 `;
                 document.getElementById('map').innerHTML = '';
                 document.getElementById('map').appendChild(errorDiv);
-
-                // Allow user to switch to a local file if they have one
-                document.getElementById('useLocalBtn')?.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    const localUrl = 'ukraine_oblasts.geojson'; // change to your file name
-                    fetch(localUrl)
-                        .then(res => res.json())
-                        .then(data => {
-                            // reload map with local data
-                            geojsonLayer = L.geoJSON(data, {
-                                style: function(feature) {
-                                    const name = feature.properties.shapeName || feature.properties.NAME_1 || feature.properties.NAME || '';
-                                    const mortality = getMortality(name, currentYear);
-                                    return { fillColor: getColor(mortality), weight: 1.5, opacity: 0.8, color: '#2c3e50', fillOpacity: 0.7 };
-                                },
-                                onEachFeature: function(feature, layer) {
-                                    const name = feature.properties.shapeName || feature.properties.NAME_1 || feature.properties.NAME || '';
-                                    layer.bindPopup(() => {
-                                        const mortality = getMortality(name, currentYear);
-                                        return `<strong>${name}</strong><br>${mortality !== null ? `📊 Mortality (${currentYear}): ${mortality}%` : '📊 Data not available'}`;
-                                    });
-                                }
-                            }).addTo(map);
-                            map.fitBounds(geojsonLayer.getBounds());
-                            errorDiv.remove();
-                        })
-                        .catch(err => {
-                            errorDiv.innerHTML = `<strong>❌ Could not load local file.</strong> Make sure you have uploaded a GeoJSON file named <code>ukraine_oblasts.geojson</code> to the same folder.`;
-                        });
-                });
             });
     });
 </script>
