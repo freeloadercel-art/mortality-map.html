@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
     <title>Holodomor Mortality Map by Oblast (1931–1934)</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/noUiSlider/15.7.1/nouislider.min.css" />
@@ -31,8 +31,9 @@
         .legend-color { display: inline-block; width: 20px; height: 20px; margin-right: 8px; vertical-align: middle; border: 1px solid #ccc; }
         .legend-item { margin-bottom: 4px; }
         .note { padding: 0.75rem 1.5rem; background: #fef9e3; font-size: 0.85rem; border-top: 1px solid #e2e8f0; }
-        .loading { text-align: center; padding: 2rem; color: #b22222; }
-        .error { text-align: center; padding: 2rem; color: #b22222; background: #ffe0e0; margin: 1rem; border-radius: 8px; }
+        .loading, .error { text-align: center; padding: 2rem; }
+        .error { color: #b22222; background: #ffe0e0; margin: 1rem; border-radius: 8px; }
+        .error a { color: #b22222; }
     </style>
 </head>
 <body>
@@ -51,7 +52,7 @@
     <div class="map-container" id="map"></div>
     <div class="note">
         <strong>📊 Data sources:</strong> Harvard MAPA Project, Wolowyna et al. (2016).<br>
-        <strong>🗺️ Map data:</strong> geoBoundaries (global administrative boundary dataset).<br>
+        <strong>🗺️ Map data:</strong> ArcGIS REST service (publicly available).<br>
         <strong>💡 Tip:</strong> Click on any oblast to see the exact mortality percentage for the selected year.
     </div>
 </div>
@@ -59,7 +60,7 @@
 <script>
     // ============================================
     // MORTALITY DATA BY OBLAST AND YEAR
-    // Based on historical research (Poltava highest, Donbas lowest)
+    // Based on historical research
     // ============================================
     const yearData = {
         1931: {
@@ -96,7 +97,6 @@
         }
     };
 
-    // Color function based on mortality percentage
     function getColor(mortality) {
         if (mortality === undefined || mortality === null) return '#cccccc';
         if (mortality <= 10) return '#fee5d9';
@@ -111,10 +111,48 @@
     let currentYear = 1932;
     let map;
 
-    // Initialize map (wait for DOM)
+    // Helper function to get mortality for a given oblast name
+    function getMortality(name, year) {
+        if (!name || !yearData[year]) return null;
+        // Exact match
+        if (yearData[year][name]) return yearData[year][name];
+        // Fuzzy match: remove common suffixes
+        let base = name.replace(/(ska|ska oblast|kyi|kyi oblast|oblast)$/i, '').trim();
+        for (let key in yearData[year]) {
+            if (key.includes(base) || base.includes(key)) return yearData[year][key];
+        }
+        return null;
+    }
+
+    function updateMapColors(year) {
+        currentYear = year;
+        document.getElementById('year-display').innerText = year;
+        if (geojsonLayer) {
+            geojsonLayer.eachLayer(function(layer) {
+                const name = layer.feature.properties?.NAME || layer.feature.properties?.name || '';
+                const mortality = getMortality(name, year);
+                layer.setStyle({
+                    fillColor: getColor(mortality),
+                    fillOpacity: 0.7
+                });
+                // Update popup content without reopening
+                if (layer.getPopup()) {
+                    let popupContent = `<strong>${name}</strong><br>`;
+                    if (mortality !== null) {
+                        popupContent += `📊 Mortality (${year}): ${mortality}%`;
+                        if (mortality >= 40) popupContent += ` 🔴 (Extreme)`;
+                        else if (mortality >= 20) popupContent += ` 🟠 (Severe)`;
+                    } else {
+                        popupContent += `📊 Data not available for ${year}`;
+                    }
+                    layer._popup.setContent(popupContent);
+                }
+            });
+        }
+    }
+
     document.addEventListener('DOMContentLoaded', function() {
         map = L.map('map').setView([49.0, 32.0], 6);
-        
         L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
             attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; CartoDB',
             subdomains: 'abcd',
@@ -122,11 +160,11 @@
             maxZoom: 10
         }).addTo(map);
 
-        // Add loading indicator
+        // Show loading indicator
         const mapDiv = document.getElementById('map');
         const loadingDiv = document.createElement('div');
         loadingDiv.className = 'loading';
-        loadingDiv.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading map data...';
+        loadingDiv.innerHTML = '🔄 Loading map data...';
         loadingDiv.style.position = 'absolute';
         loadingDiv.style.top = '50%';
         loadingDiv.style.left = '50%';
@@ -138,43 +176,22 @@
         mapDiv.style.position = 'relative';
         mapDiv.appendChild(loadingDiv);
 
-        // RELIABLE GEOJSON URL: geoBoundaries ADM1 (oblasts) from authoritative source
-        // This is the correct URL for Ukrainian first-level administrative boundaries
-        const geojsonUrl = 'https://raw.githubusercontent.com/wmgeolab/geoBoundaries/main/releaseData/gbOpen/UKR/ADM1/geoBoundaries-UKR-ADM1.geojson';
-        
+        // Use a reliable GeoJSON source: ArcGIS REST service (CORS-enabled)
+        const geojsonUrl = 'https://services1.arcgis.com/0MSEUqKaxRlEPj5g/arcgis/rest/services/Ukraine_Admin_Boundaries/FeatureServer/0/query?where=1%3D1&outFields=*&f=geojson';
+
         fetch(geojsonUrl)
             .then(response => {
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                }
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
                 return response.json();
             })
             .then(data => {
-                // Remove loading indicator
                 if (loadingDiv) loadingDiv.remove();
-                
-                console.log('GeoJSON loaded successfully. Found', data.features.length, 'features.');
-                
-                // Add the GeoJSON layer
+                console.log('GeoJSON loaded', data.features.length);
+
                 geojsonLayer = L.geoJSON(data, {
                     style: function(feature) {
-                        const name = feature.properties.shapeName || feature.properties.NAME_1 || feature.properties.ADMIN;
-                        let mortality = null;
-                        if (name && yearData[currentYear]) {
-                            // Try exact match
-                            if (yearData[currentYear][name]) {
-                                mortality = yearData[currentYear][name];
-                            } else {
-                                // Try fuzzy match (e.g., "Poltavska" vs "Poltava")
-                                for (let key in yearData[currentYear]) {
-                                    if (name.includes(key) || key.includes(name) || 
-                                        (key.replace('ska', '') === name.replace('ska', ''))) {
-                                        mortality = yearData[currentYear][key];
-                                        break;
-                                    }
-                                }
-                            }
-                        }
+                        const name = feature.properties?.NAME || feature.properties?.name || '';
+                        const mortality = getMortality(name, currentYear);
                         return {
                             fillColor: getColor(mortality),
                             weight: 1.5,
@@ -184,38 +201,24 @@
                         };
                     },
                     onEachFeature: function(feature, layer) {
-                        const name = feature.properties.shapeName || feature.properties.NAME_1 || feature.properties.ADMIN || 'Unknown';
+                        const name = feature.properties?.NAME || feature.properties?.name || '';
                         layer.bindPopup(function() {
-                            let mortality = null;
-                            if (name && yearData[currentYear]) {
-                                if (yearData[currentYear][name]) {
-                                    mortality = yearData[currentYear][name];
-                                } else {
-                                    for (let key in yearData[currentYear]) {
-                                        if (name.includes(key) || key.includes(name)) {
-                                            mortality = yearData[currentYear][key];
-                                            break;
-                                        }
-                                    }
-                                }
-                            }
+                            const mortality = getMortality(name, currentYear);
                             let popupContent = `<strong>${name}</strong><br>`;
-                            if (mortality !== null && mortality !== undefined) {
+                            if (mortality !== null) {
                                 popupContent += `📊 Mortality (${currentYear}): ${mortality}%`;
                                 if (mortality >= 40) popupContent += ` 🔴 (Extreme)`;
                                 else if (mortality >= 20) popupContent += ` 🟠 (Severe)`;
                             } else {
-                                popupContent += `📊 Mortality data not available for ${currentYear}`;
+                                popupContent += `📊 Data not available for ${currentYear}`;
                             }
                             return popupContent;
                         });
                     }
                 }).addTo(map);
-                
-                // Fit map to bounds
                 map.fitBounds(geojsonLayer.getBounds());
-                
-                // Add custom legend
+
+                // Legend
                 const legend = L.control({ position: 'bottomright' });
                 legend.onAdd = function() {
                     const div = L.DomUtil.create('div', 'legend');
@@ -233,11 +236,10 @@
                     return div;
                 };
                 legend.addTo(map);
-                
-                // Setup timeline slider
+
+                // Setup slider
                 const slider = document.getElementById('timeline-slider');
                 const yearDisplay = document.getElementById('year-display');
-                
                 noUiSlider.create(slider, {
                     start: [1932],
                     connect: [true, false],
@@ -245,52 +247,7 @@
                     range: { min: 1931, max: 1934 },
                     format: { to: v => Math.round(v), from: v => Math.round(v) }
                 });
-                
-                // Function to update colors when year changes
-                function updateMapColors(year) {
-                    currentYear = year;
-                    yearDisplay.innerText = year;
-                    
-                    if (geojsonLayer) {
-                        geojsonLayer.eachLayer(function(layer) {
-                            const feature = layer.feature;
-                            const name = feature.properties.shapeName || feature.properties.NAME_1 || feature.properties.ADMIN;
-                            let mortality = null;
-                            if (name && yearData[year]) {
-                                if (yearData[year][name]) {
-                                    mortality = yearData[year][name];
-                                } else {
-                                    for (let key in yearData[year]) {
-                                        if (name.includes(key) || key.includes(name) ||
-                                            (key.replace('ska', '') === name.replace('ska', ''))) {
-                                            mortality = yearData[year][key];
-                                            break;
-                                        }
-                                    }
-                                }
-                            }
-                            layer.setStyle({
-                                fillColor: getColor(mortality),
-                                fillOpacity: 0.7
-                            });
-                            
-                            // Update popup content without reopening
-                            if (layer.getPopup()) {
-                                let popupContent = `<strong>${name}</strong><br>`;
-                                if (mortality !== null && mortality !== undefined) {
-                                    popupContent += `📊 Mortality (${year}): ${mortality}%`;
-                                    if (mortality >= 40) popupContent += ` 🔴 (Extreme)`;
-                                    else if (mortality >= 20) popupContent += ` 🟠 (Severe)`;
-                                } else {
-                                    popupContent += `📊 Mortality data not available for ${year}`;
-                                }
-                                layer._popup.setContent(popupContent);
-                            }
-                        });
-                    }
-                }
-                
-                slider.noUiSlider.on('update', function(values) {
+                slider.noUiSlider.on('update', (values) => {
                     updateMapColors(values[0]);
                 });
             })
@@ -302,14 +259,18 @@
                 errorDiv.innerHTML = `
                     <strong>❌ Failed to load map data</strong><br>
                     Error: ${error.message}<br><br>
-                    <strong>Troubleshooting:</strong><br>
-                    • Make sure you have an internet connection<br>
-                    • The GeoJSON URL may be temporarily unavailable<br>
-                    • Try refreshing the page<br><br>
-                    <a href="https://github.com/wmgeolab/geoBoundaries" target="_blank">View geoBoundaries project</a>
+                    This may be due to network restrictions or the GeoJSON service being unavailable.<br>
+                    <a href="https://services1.arcgis.com/0MSEUqKaxRlEPj5g/arcgis/rest/services/Ukraine_Admin_Boundaries/FeatureServer/0" target="_blank">Check the ArcGIS service here</a><br><br>
+                    Alternatively, you can <a href="#" id="useFallback">use a fallback GeoJSON</a>.
                 `;
                 document.getElementById('map').innerHTML = '';
                 document.getElementById('map').appendChild(errorDiv);
+
+                // Provide a fallback option (user must provide their own GeoJSON)
+                document.getElementById('useFallback')?.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    alert('Please provide a GeoJSON file (e.g., ukraine_oblasts.geojson) and replace the geojsonUrl in the code with its URL.');
+                });
             });
     });
 </script>
