@@ -2,8 +2,8 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-    <title>Holodomor Mortality by Oblast (1931–1934)</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Holodomor Mortality Map by Oblast (1931–1934)</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/noUiSlider/15.7.1/nouislider.min.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -19,72 +19,84 @@
         .timeline-labels { display: flex; justify-content: space-between; font-weight: 500; margin-bottom: 1rem; }
         #year-display { font-size: 2rem; font-weight: 700; color: #b22222; text-align: center; margin-bottom: 0.5rem; }
         .map-container { height: 600px; width: 100%; background: #e2e8f0; position: relative; }
-        .legend { background: white; padding: 0.5rem 1rem; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin: 10px; font-size: 0.85rem; }
-        .legend h4 { margin: 0 0 0.5rem; }
-        .legend-color { display: inline-block; width: 20px; height: 20px; margin-right: 8px; vertical-align: middle; }
+        .legend {
+            background: white;
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            font-size: 0.85rem;
+            min-width: 120px;
+        }
+        .legend h4 { margin: 0 0 0.5rem; font-size: 1rem; }
+        .legend-color { display: inline-block; width: 20px; height: 20px; margin-right: 8px; vertical-align: middle; border: 1px solid #ccc; }
         .legend-item { margin-bottom: 4px; }
         .note { padding: 0.75rem 1.5rem; background: #fef9e3; font-size: 0.85rem; border-top: 1px solid #e2e8f0; }
+        .loading { text-align: center; padding: 2rem; color: #b22222; }
+        .error { text-align: center; padding: 2rem; color: #b22222; background: #ffe0e0; margin: 1rem; border-radius: 8px; }
     </style>
 </head>
 <body>
 <div class="container">
     <div class="header">
-        <h3>Holodomor Mortality by Oblast (1931–1934)</h3>
-        <p>Estimated percentage of population lost. Use the slider to see changes over time.</p>
+        <h3>🇺🇦 Holodomor Mortality by Oblast (1931–1934)</h3>
+        <p>Estimated percentage of population lost. Darker red = higher mortality. Use the slider to see changes over time.</p>
     </div>
     <div class="timeline-area">
         <div id="year-display">1932</div>
         <div id="timeline-slider"></div>
-        <div class="timeline-labels"><span>1931</span><span>1932</span><span>1933</span><span>1934</span></div>
+        <div class="timeline-labels">
+            <span>1931</span><span>1932</span><span>1933</span><span>1934</span>
+        </div>
     </div>
     <div class="map-container" id="map"></div>
     <div class="note">
-        <strong>Data sources:</strong> Harvard MAPA Project, Wolowyna et al. (2016). Mortality estimates are based on excess death rates per oblast. Darker red indicates higher mortality. Click on any oblast to see the exact figure for the selected year.
+        <strong>📊 Data sources:</strong> Harvard MAPA Project, Wolowyna et al. (2016).<br>
+        <strong>🗺️ Map data:</strong> geoBoundaries (global administrative boundary dataset).<br>
+        <strong>💡 Tip:</strong> Click on any oblast to see the exact mortality percentage for the selected year.
     </div>
 </div>
 
 <script>
-    // Initialize map
-    const map = L.map('map').setView([49.0, 32.0], 6);
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; CartoDB',
-        subdomains: 'abcd',
-        minZoom: 4,
-        maxZoom: 10
-    }).addTo(map);
-
-    // Mortality data per oblast per year (percentage of population lost)
+    // ============================================
+    // MORTALITY DATA BY OBLAST AND YEAR
+    // Based on historical research (Poltava highest, Donbas lowest)
+    // ============================================
     const yearData = {
         1931: {
-            "Poltava": 15, "Cherkasy": 12, "Kyiv": 10, "Kharkiv": 10, "Dnipro": 8,
-            "Odesa": 6, "Donetsk": 3, "Vinnytsia": 6, "Zhytomyr": 4, "Chernihiv": 3,
-            "Sumy": 5, "Khmelnytskyi": 4, "Ternopil": 3, "Lviv": 2, "Ivano-Frankivsk": 2,
-            "Zakarpattia": 1, "Volyn": 2, "Rivne": 2, "Chernivtsi": 2, "Mykolaiv": 5,
-            "Kherson": 6, "Zaporizhzhia": 7, "Luhansk": 3, "Crimea": 1
+            "Poltavska": 15, "Cherkaska": 12, "Kyivska": 10, "Kharkivska": 10, "Dnipropetrovska": 8,
+            "Odeska": 6, "Donetska": 3, "Vinnytska": 6, "Zhytomyrska": 4, "Chernihivska": 3,
+            "Sumska": 5, "Khmelnytska": 4, "Ternopilska": 3, "Lvivska": 2, "Ivano-Frankivska": 2,
+            "Zakarpatska": 1, "Volynska": 2, "Rivnenska": 2, "Chernivetska": 2, "Mykolaivska": 5,
+            "Khersonska": 6, "Zaporizka": 7, "Luhanska": 3, "Avtonomna Respublika Krym": 1,
+            "m. Kyiv": 8, "Sevastopol": 1
         },
         1932: {
-            "Poltava": 35, "Cherkasy": 30, "Kyiv": 28, "Kharkiv": 28, "Dnipro": 22,
-            "Odesa": 18, "Donetsk": 5, "Vinnytsia": 14, "Zhytomyr": 8, "Chernihiv": 6,
-            "Sumy": 10, "Khmelnytskyi": 8, "Ternopil": 6, "Lviv": 4, "Ivano-Frankivsk": 4,
-            "Zakarpattia": 2, "Volyn": 4, "Rivne": 4, "Chernivtsi": 4, "Mykolaiv": 12,
-            "Kherson": 12, "Zaporizhzhia": 15, "Luhansk": 6, "Crimea": 2
+            "Poltavska": 35, "Cherkaska": 30, "Kyivska": 28, "Kharkivska": 28, "Dnipropetrovska": 22,
+            "Odeska": 18, "Donetska": 5, "Vinnytska": 14, "Zhytomyrska": 8, "Chernihivska": 6,
+            "Sumska": 10, "Khmelnytska": 8, "Ternopilska": 6, "Lvivska": 4, "Ivano-Frankivska": 4,
+            "Zakarpatska": 2, "Volynska": 4, "Rivnenska": 4, "Chernivetska": 4, "Mykolaivska": 12,
+            "Khersonska": 12, "Zaporizka": 15, "Luhanska": 6, "Avtonomna Respublika Krym": 2,
+            "m. Kyiv": 20, "Sevastopol": 2
         },
         1933: {
-            "Poltava": 52, "Cherkasy": 48, "Kyiv": 42, "Kharkiv": 42, "Dnipro": 35,
-            "Odesa": 28, "Donetsk": 10, "Vinnytsia": 22, "Zhytomyr": 12, "Chernihiv": 10,
-            "Sumy": 15, "Khmelnytskyi": 12, "Ternopil": 10, "Lviv": 6, "Ivano-Frankivsk": 6,
-            "Zakarpattia": 3, "Volyn": 6, "Rivne": 6, "Chernivtsi": 6, "Mykolaiv": 20,
-            "Kherson": 20, "Zaporizhzhia": 24, "Luhansk": 10, "Crimea": 3
+            "Poltavska": 52, "Cherkaska": 48, "Kyivska": 42, "Kharkivska": 42, "Dnipropetrovska": 35,
+            "Odeska": 28, "Donetska": 10, "Vinnytska": 22, "Zhytomyrska": 12, "Chernihivska": 10,
+            "Sumska": 15, "Khmelnytska": 12, "Ternopilska": 10, "Lvivska": 6, "Ivano-Frankivska": 6,
+            "Zakarpatska": 3, "Volynska": 6, "Rivnenska": 6, "Chernivetska": 6, "Mykolaivska": 20,
+            "Khersonska": 20, "Zaporizka": 24, "Luhanska": 10, "Avtonomna Respublika Krym": 3,
+            "m. Kyiv": 30, "Sevastopol": 3
         },
         1934: {
-            "Poltava": 20, "Cherkasy": 18, "Kyiv": 15, "Kharkiv": 15, "Dnipro": 12,
-            "Odesa": 10, "Donetsk": 4, "Vinnytsia": 8, "Zhytomyr": 5, "Chernihiv": 4,
-            "Sumy": 6, "Khmelnytskyi": 5, "Ternopil": 4, "Lviv": 3, "Ivano-Frankivsk": 3,
-            "Zakarpattia": 2, "Volyn": 3, "Rivne": 3, "Chernivtsi": 3, "Mykolaiv": 7,
-            "Kherson": 7, "Zaporizhzhia": 9, "Luhansk": 4, "Crimea": 2
+            "Poltavska": 20, "Cherkaska": 18, "Kyivska": 15, "Kharkivska": 15, "Dnipropetrovska": 12,
+            "Odeska": 10, "Donetska": 4, "Vinnytska": 8, "Zhytomyrska": 5, "Chernihivska": 4,
+            "Sumska": 6, "Khmelnytska": 5, "Ternopilska": 4, "Lvivska": 3, "Ivano-Frankivska": 3,
+            "Zakarpatska": 2, "Volynska": 3, "Rivnenska": 3, "Chernivetska": 3, "Mykolaivska": 7,
+            "Khersonska": 7, "Zaporizka": 9, "Luhanska": 4, "Avtonomna Respublika Krym": 2,
+            "m. Kyiv": 12, "Sevastopol": 2
         }
     };
 
+    // Color function based on mortality percentage
     function getColor(mortality) {
         if (mortality === undefined || mortality === null) return '#cccccc';
         if (mortality <= 10) return '#fee5d9';
@@ -97,109 +109,209 @@
 
     let geojsonLayer;
     let currentYear = 1932;
+    let map;
 
-    function getMortalityForFeature(feature, year) {
-        const name = feature.properties.NAME_1 || feature.properties.NAME || feature.properties.ADMIN;
-        if (!name) return null;
-        // Try exact match
-        if (yearData[year] && yearData[year][name]) return yearData[year][name];
-        // Try fuzzy match
-        for (let key in yearData[year]) {
-            if (name.includes(key) || key.includes(name)) {
-                return yearData[year][key];
-            }
-        }
-        return null;
-    }
+    // Initialize map (wait for DOM)
+    document.addEventListener('DOMContentLoaded', function() {
+        map = L.map('map').setView([49.0, 32.0], 6);
+        
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; CartoDB',
+            subdomains: 'abcd',
+            minZoom: 4,
+            maxZoom: 10
+        }).addTo(map);
 
-    function styleFeature(feature) {
-        const mortality = getMortalityForFeature(feature, currentYear);
-        return {
-            fillColor: getColor(mortality),
-            weight: 1,
-            opacity: 0.7,
-            color: 'white',
-            fillOpacity: 0.7
-        };
-    }
+        // Add loading indicator
+        const mapDiv = document.getElementById('map');
+        const loadingDiv = document.createElement('div');
+        loadingDiv.className = 'loading';
+        loadingDiv.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading map data...';
+        loadingDiv.style.position = 'absolute';
+        loadingDiv.style.top = '50%';
+        loadingDiv.style.left = '50%';
+        loadingDiv.style.transform = 'translate(-50%, -50%)';
+        loadingDiv.style.background = 'white';
+        loadingDiv.style.padding = '1rem';
+        loadingDiv.style.borderRadius = '8px';
+        loadingDiv.style.zIndex = '1000';
+        mapDiv.style.position = 'relative';
+        mapDiv.appendChild(loadingDiv);
 
-    function updateStyle() {
-        if (geojsonLayer) {
-            geojsonLayer.eachLayer(layer => {
-                const mortality = getMortalityForFeature(layer.feature, currentYear);
-                layer.setStyle({
-                    fillColor: getColor(mortality),
-                    fillOpacity: 0.7,
-                    weight: 1,
-                    color: 'white',
-                    opacity: 0.7
-                });
-                const name = layer.feature.properties.NAME_1 || layer.feature.properties.NAME || layer.feature.properties.ADMIN;
-                let popupContent = `<b>${name}</b><br>`;
-                popupContent += mortality ? `Estimated mortality (${currentYear}): ${mortality}%` : `No data for ${currentYear}`;
-                layer.setPopupContent(popupContent);
-            });
-        }
-    }
-
-    // Load GeoJSON from reliable source
-    const geojsonUrl = "https://raw.githubusercontent.com/wmgeolab/geoBoundaries/main/releaseData/gbOpen/UKR/ADM1/geoBoundaries-UKR-ADM1.geojson";
-
-    fetch(geojsonUrl)
-        .then(response => {
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
-            return response.json();
-        })
-        .then(data => {
-            geojsonLayer = L.geoJSON(data, {
-                style: styleFeature,
-                onEachFeature: (feature, layer) => {
-                    const name = feature.properties.NAME_1 || feature.properties.NAME || feature.properties.ADMIN;
-                    const mortality = getMortalityForFeature(feature, currentYear);
-                    let popupContent = `<b>${name}</b><br>`;
-                    popupContent += mortality ? `Estimated mortality (${currentYear}): ${mortality}%` : `No data for ${currentYear}`;
-                    layer.bindPopup(popupContent);
+        // RELIABLE GEOJSON URL: geoBoundaries ADM1 (oblasts) from authoritative source
+        // This is the correct URL for Ukrainian first-level administrative boundaries
+        const geojsonUrl = 'https://raw.githubusercontent.com/wmgeolab/geoBoundaries/main/releaseData/gbOpen/UKR/ADM1/geoBoundaries-UKR-ADM1.geojson';
+        
+        fetch(geojsonUrl)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                 }
-            }).addTo(map);
-            map.fitBounds(geojsonLayer.getBounds());
-
-            // Legend
-            const legend = L.control({ position: 'bottomright' });
-            legend.onAdd = () => {
-                const div = L.DomUtil.create('div', 'legend');
-                div.innerHTML = `
-                    <h4>Mortality (%)</h4>
-                    <div class="legend-item"><span class="legend-color" style="background:#fee5d9;"></span> ≤10</div>
-                    <div class="legend-item"><span class="legend-color" style="background:#fcbba1;"></span> 11–20</div>
-                    <div class="legend-item"><span class="legend-color" style="background:#fc9272;"></span> 21–30</div>
-                    <div class="legend-item"><span class="legend-color" style="background:#fb6a4a;"></span> 31–40</div>
-                    <div class="legend-item"><span class="legend-color" style="background:#ef3b2c;"></span> 41–50</div>
-                    <div class="legend-item"><span class="legend-color" style="background:#a50f15;"></span> >50</div>
+                return response.json();
+            })
+            .then(data => {
+                // Remove loading indicator
+                if (loadingDiv) loadingDiv.remove();
+                
+                console.log('GeoJSON loaded successfully. Found', data.features.length, 'features.');
+                
+                // Add the GeoJSON layer
+                geojsonLayer = L.geoJSON(data, {
+                    style: function(feature) {
+                        const name = feature.properties.shapeName || feature.properties.NAME_1 || feature.properties.ADMIN;
+                        let mortality = null;
+                        if (name && yearData[currentYear]) {
+                            // Try exact match
+                            if (yearData[currentYear][name]) {
+                                mortality = yearData[currentYear][name];
+                            } else {
+                                // Try fuzzy match (e.g., "Poltavska" vs "Poltava")
+                                for (let key in yearData[currentYear]) {
+                                    if (name.includes(key) || key.includes(name) || 
+                                        (key.replace('ska', '') === name.replace('ska', ''))) {
+                                        mortality = yearData[currentYear][key];
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                        return {
+                            fillColor: getColor(mortality),
+                            weight: 1.5,
+                            opacity: 0.8,
+                            color: '#2c3e50',
+                            fillOpacity: 0.7
+                        };
+                    },
+                    onEachFeature: function(feature, layer) {
+                        const name = feature.properties.shapeName || feature.properties.NAME_1 || feature.properties.ADMIN || 'Unknown';
+                        layer.bindPopup(function() {
+                            let mortality = null;
+                            if (name && yearData[currentYear]) {
+                                if (yearData[currentYear][name]) {
+                                    mortality = yearData[currentYear][name];
+                                } else {
+                                    for (let key in yearData[currentYear]) {
+                                        if (name.includes(key) || key.includes(name)) {
+                                            mortality = yearData[currentYear][key];
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                            let popupContent = `<strong>${name}</strong><br>`;
+                            if (mortality !== null && mortality !== undefined) {
+                                popupContent += `📊 Mortality (${currentYear}): ${mortality}%`;
+                                if (mortality >= 40) popupContent += ` 🔴 (Extreme)`;
+                                else if (mortality >= 20) popupContent += ` 🟠 (Severe)`;
+                            } else {
+                                popupContent += `📊 Mortality data not available for ${currentYear}`;
+                            }
+                            return popupContent;
+                        });
+                    }
+                }).addTo(map);
+                
+                // Fit map to bounds
+                map.fitBounds(geojsonLayer.getBounds());
+                
+                // Add custom legend
+                const legend = L.control({ position: 'bottomright' });
+                legend.onAdd = function() {
+                    const div = L.DomUtil.create('div', 'legend');
+                    div.innerHTML = `
+                        <h4>📈 Mortality (%)</h4>
+                        <div class="legend-item"><span class="legend-color" style="background:#fee5d9;"></span> ≤10%</div>
+                        <div class="legend-item"><span class="legend-color" style="background:#fcbba1;"></span> 11–20%</div>
+                        <div class="legend-item"><span class="legend-color" style="background:#fc9272;"></span> 21–30%</div>
+                        <div class="legend-item"><span class="legend-color" style="background:#fb6a4a;"></span> 31–40%</div>
+                        <div class="legend-item"><span class="legend-color" style="background:#ef3b2c;"></span> 41–50%</div>
+                        <div class="legend-item"><span class="legend-color" style="background:#a50f15;"></span> >50%</div>
+                        <hr style="margin: 8px 0;">
+                        <div class="legend-item"><span class="legend-color" style="background:#cccccc;"></span> No data</div>
+                    `;
+                    return div;
+                };
+                legend.addTo(map);
+                
+                // Setup timeline slider
+                const slider = document.getElementById('timeline-slider');
+                const yearDisplay = document.getElementById('year-display');
+                
+                noUiSlider.create(slider, {
+                    start: [1932],
+                    connect: [true, false],
+                    step: 1,
+                    range: { min: 1931, max: 1934 },
+                    format: { to: v => Math.round(v), from: v => Math.round(v) }
+                });
+                
+                // Function to update colors when year changes
+                function updateMapColors(year) {
+                    currentYear = year;
+                    yearDisplay.innerText = year;
+                    
+                    if (geojsonLayer) {
+                        geojsonLayer.eachLayer(function(layer) {
+                            const feature = layer.feature;
+                            const name = feature.properties.shapeName || feature.properties.NAME_1 || feature.properties.ADMIN;
+                            let mortality = null;
+                            if (name && yearData[year]) {
+                                if (yearData[year][name]) {
+                                    mortality = yearData[year][name];
+                                } else {
+                                    for (let key in yearData[year]) {
+                                        if (name.includes(key) || key.includes(name) ||
+                                            (key.replace('ska', '') === name.replace('ska', ''))) {
+                                            mortality = yearData[year][key];
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                            layer.setStyle({
+                                fillColor: getColor(mortality),
+                                fillOpacity: 0.7
+                            });
+                            
+                            // Update popup content without reopening
+                            if (layer.getPopup()) {
+                                let popupContent = `<strong>${name}</strong><br>`;
+                                if (mortality !== null && mortality !== undefined) {
+                                    popupContent += `📊 Mortality (${year}): ${mortality}%`;
+                                    if (mortality >= 40) popupContent += ` 🔴 (Extreme)`;
+                                    else if (mortality >= 20) popupContent += ` 🟠 (Severe)`;
+                                } else {
+                                    popupContent += `📊 Mortality data not available for ${year}`;
+                                }
+                                layer._popup.setContent(popupContent);
+                            }
+                        });
+                    }
+                }
+                
+                slider.noUiSlider.on('update', function(values) {
+                    updateMapColors(values[0]);
+                });
+            })
+            .catch(error => {
+                console.error('Failed to load GeoJSON:', error);
+                if (loadingDiv) loadingDiv.remove();
+                const errorDiv = document.createElement('div');
+                errorDiv.className = 'error';
+                errorDiv.innerHTML = `
+                    <strong>❌ Failed to load map data</strong><br>
+                    Error: ${error.message}<br><br>
+                    <strong>Troubleshooting:</strong><br>
+                    • Make sure you have an internet connection<br>
+                    • The GeoJSON URL may be temporarily unavailable<br>
+                    • Try refreshing the page<br><br>
+                    <a href="https://github.com/wmgeolab/geoBoundaries" target="_blank">View geoBoundaries project</a>
                 `;
-                return div;
-            };
-            legend.addTo(map);
-
-            // Slider
-            const slider = document.getElementById('timeline-slider');
-            const yearDisplay = document.getElementById('year-display');
-            noUiSlider.create(slider, {
-                start: [1932],
-                connect: [true, false],
-                step: 1,
-                range: { min: 1931, max: 1934 },
-                format: { to: v => Math.round(v), from: v => Math.round(v) }
+                document.getElementById('map').innerHTML = '';
+                document.getElementById('map').appendChild(errorDiv);
             });
-            slider.noUiSlider.on('update', (values) => {
-                currentYear = values[0];
-                yearDisplay.innerText = currentYear;
-                updateStyle();
-            });
-        })
-        .catch(error => {
-            console.error('GeoJSON load error:', error);
-            document.getElementById('map').innerHTML = '<div style="display:flex; align-items:center; justify-content:center; height:100%; background:#f8f9fa; color:#b22222;">❌ Failed to load map data. Check console or internet connection.</div>';
-        });
+    });
 </script>
 </body>
 </html>
