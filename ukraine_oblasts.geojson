@@ -1,4 +1,6 @@
 {
+javascript
+const geojsonFileName = "ukraine_oblasts.geojson";
     "created": "2022-01-06T14:10:36.587123",
     "description": "GeoJSON ADM0 boundaries for Ukraine",
     "format": "GeoJSON",
