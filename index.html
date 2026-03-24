@@ -52,7 +52,7 @@
     <div class="map-container" id="map"></div>
     <div class="note">
         <strong>📊 Data sources:</strong> Harvard MAPA Project, Wolowyna et al. (2016).<br>
-        <strong>🗺️ Map data:</strong> ArcGIS REST service (publicly available).<br>
+        <strong>🗺️ Map data:</strong> geoBoundaries (global administrative boundaries) – <a href="https://github.com/wmgeolab/geoBoundaries" target="_blank">source</a>.<br>
         <strong>💡 Tip:</strong> Click on any oblast to see the exact mortality percentage for the selected year.
     </div>
 </div>
@@ -60,7 +60,7 @@
 <script>
     // ============================================
     // MORTALITY DATA BY OBLAST AND YEAR
-    // Based on historical research
+    // Based on historical research (Poltava highest, Donbas lowest)
     // ============================================
     const yearData = {
         1931: {
@@ -111,13 +111,12 @@
     let currentYear = 1932;
     let map;
 
-    // Helper function to get mortality for a given oblast name
+    // Helper to get mortality for a given oblast name
     function getMortality(name, year) {
         if (!name || !yearData[year]) return null;
-        // Exact match
         if (yearData[year][name]) return yearData[year][name];
-        // Fuzzy match: remove common suffixes
-        let base = name.replace(/(ska|ska oblast|kyi|kyi oblast|oblast)$/i, '').trim();
+        // Fuzzy match: try removing suffixes like "ska", "ska oblast", etc.
+        const base = name.replace(/(ska|kyi|ska oblast|kyi oblast|oblast)$/i, '').trim();
         for (let key in yearData[year]) {
             if (key.includes(base) || base.includes(key)) return yearData[year][key];
         }
@@ -129,13 +128,13 @@
         document.getElementById('year-display').innerText = year;
         if (geojsonLayer) {
             geojsonLayer.eachLayer(function(layer) {
-                const name = layer.feature.properties?.NAME || layer.feature.properties?.name || '';
+                const props = layer.feature.properties;
+                const name = props.shapeName || props.NAME_1 || props.NAME || props.name || '';
                 const mortality = getMortality(name, year);
                 layer.setStyle({
                     fillColor: getColor(mortality),
                     fillOpacity: 0.7
                 });
-                // Update popup content without reopening
                 if (layer.getPopup()) {
                     let popupContent = `<strong>${name}</strong><br>`;
                     if (mortality !== null) {
@@ -176,21 +175,21 @@
         mapDiv.style.position = 'relative';
         mapDiv.appendChild(loadingDiv);
 
-        // Use a reliable GeoJSON source: ArcGIS REST service (CORS-enabled)
-        const geojsonUrl = 'https://services1.arcgis.com/0MSEUqKaxRlEPj5g/arcgis/rest/services/Ukraine_Admin_Boundaries/FeatureServer/0/query?where=1%3D1&outFields=*&f=geojson';
+        // Use the raw GitHub URL for geoBoundaries ADM1 (oblasts)
+        const geojsonUrl = 'https://raw.githubusercontent.com/wmgeolab/geoBoundaries/main/releaseData/gbOpen/UKR/ADM1/geoBoundaries-UKR-ADM1.geojson';
 
         fetch(geojsonUrl)
             .then(response => {
-                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                 return response.json();
             })
             .then(data => {
                 if (loadingDiv) loadingDiv.remove();
-                console.log('GeoJSON loaded', data.features.length);
+                console.log('GeoJSON loaded successfully', data.features.length);
 
                 geojsonLayer = L.geoJSON(data, {
                     style: function(feature) {
-                        const name = feature.properties?.NAME || feature.properties?.name || '';
+                        const name = feature.properties.shapeName || feature.properties.NAME_1 || feature.properties.NAME || '';
                         const mortality = getMortality(name, currentYear);
                         return {
                             fillColor: getColor(mortality),
@@ -201,7 +200,7 @@
                         };
                     },
                     onEachFeature: function(feature, layer) {
-                        const name = feature.properties?.NAME || feature.properties?.name || '';
+                        const name = feature.properties.shapeName || feature.properties.NAME_1 || feature.properties.NAME || '';
                         layer.bindPopup(function() {
                             const mortality = getMortality(name, currentYear);
                             let popupContent = `<strong>${name}</strong><br>`;
@@ -218,7 +217,7 @@
                 }).addTo(map);
                 map.fitBounds(geojsonLayer.getBounds());
 
-                // Legend
+                // Add legend
                 const legend = L.control({ position: 'bottomright' });
                 legend.onAdd = function() {
                     const div = L.DomUtil.create('div', 'legend');
@@ -237,7 +236,7 @@
                 };
                 legend.addTo(map);
 
-                // Setup slider
+                // Setup timeline slider
                 const slider = document.getElementById('timeline-slider');
                 const yearDisplay = document.getElementById('year-display');
                 noUiSlider.create(slider, {
@@ -259,17 +258,41 @@
                 errorDiv.innerHTML = `
                     <strong>❌ Failed to load map data</strong><br>
                     Error: ${error.message}<br><br>
-                    This may be due to network restrictions or the GeoJSON service being unavailable.<br>
-                    <a href="https://services1.arcgis.com/0MSEUqKaxRlEPj5g/arcgis/rest/services/Ukraine_Admin_Boundaries/FeatureServer/0" target="_blank">Check the ArcGIS service here</a><br><br>
-                    Alternatively, you can <a href="#" id="useFallback">use a fallback GeoJSON</a>.
+                    This may be due to network issues or rate limiting.<br>
+                    <strong>Alternative:</strong> Upload your own GeoJSON file to your GitHub repository and change the URL in the code.<br><br>
+                    <a href="#" id="useLocalBtn">Use local file (ukraine_oblasts.geojson)</a>
                 `;
                 document.getElementById('map').innerHTML = '';
                 document.getElementById('map').appendChild(errorDiv);
 
-                // Provide a fallback option (user must provide their own GeoJSON)
-                document.getElementById('useFallback')?.addEventListener('click', (e) => {
+                // Allow user to switch to a local file if they have one
+                document.getElementById('useLocalBtn')?.addEventListener('click', (e) => {
                     e.preventDefault();
-                    alert('Please provide a GeoJSON file (e.g., ukraine_oblasts.geojson) and replace the geojsonUrl in the code with its URL.');
+                    const localUrl = 'ukraine_oblasts.geojson'; // change to your file name
+                    fetch(localUrl)
+                        .then(res => res.json())
+                        .then(data => {
+                            // reload map with local data
+                            geojsonLayer = L.geoJSON(data, {
+                                style: function(feature) {
+                                    const name = feature.properties.shapeName || feature.properties.NAME_1 || feature.properties.NAME || '';
+                                    const mortality = getMortality(name, currentYear);
+                                    return { fillColor: getColor(mortality), weight: 1.5, opacity: 0.8, color: '#2c3e50', fillOpacity: 0.7 };
+                                },
+                                onEachFeature: function(feature, layer) {
+                                    const name = feature.properties.shapeName || feature.properties.NAME_1 || feature.properties.NAME || '';
+                                    layer.bindPopup(() => {
+                                        const mortality = getMortality(name, currentYear);
+                                        return `<strong>${name}</strong><br>${mortality !== null ? `📊 Mortality (${currentYear}): ${mortality}%` : '📊 Data not available'}`;
+                                    });
+                                }
+                            }).addTo(map);
+                            map.fitBounds(geojsonLayer.getBounds());
+                            errorDiv.remove();
+                        })
+                        .catch(err => {
+                            errorDiv.innerHTML = `<strong>❌ Could not load local file.</strong> Make sure you have uploaded a GeoJSON file named <code>ukraine_oblasts.geojson</code> to the same folder.`;
+                        });
                 });
             });
     });
